@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>심플 방치형 키우기</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background-color: #f0f0f0; padding-top: 50px; }
+        #gold-display { font-size: 2em; font-weight: bold; color: #d4af37; }
+        .btn { padding: 15px 30px; font-size: 1.2em; cursor: pointer; margin: 10px; border: none; border-radius: 8px; transition: 0.2s; }
+        .click-btn { background-color: #4CAF50; color: white; }
+        .upg-btn { background-color: #2196F3; color: white; }
+        .upg-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+    <h1>💰 골드 키우기</h1>
+    <div id="gold-display">현재 골드: 0</div>
+    <p id="gps-display">초당 수익(GPS): 0</p>
+
+    <button class="btn click-btn" onclick="clickGold()">클릭해서 채굴!</button>
+
+    <hr>
+
+    <h3>상점</h3>
+    <button id="upg1" class="btn upg-btn" onclick="buyUpgrade()">
+        자동 채굴기 구매 (가격: 10) <br> <small>초당 +1 골드</small>
+    </button>
+
+    <script>
+        let gold = 0;
+        let gps = 0; // Gold Per Second
+        let upgradeCost = 10;
+
+        // 골드 표시 업데이트
+        function updateDisplay() {
+            document.getElementById('gold-display').innerText = `현재 골드: ${Math.floor(gold)}`;
+            document.getElementById('gps-display').innerText = `초당 수익(GPS): ${gps}`;
+            
+            // 버튼 활성화/비활성화 제어
+            const upgBtn = document.getElementById('upg1');
+            upgBtn.disabled = gold < upgradeCost;
+            upgBtn.innerHTML = `자동 채굴기 구매 (가격: ${upgradeCost}) <br> <small>초당 +1 골드</small>`;
+        }
+
+        // 클릭 이벤트
+        function clickGold() {
+            gold += 1;
+            updateDisplay();
+        }
+
+        // 업그레이드 구매
+        function buyUpgrade() {
+            if (gold >= upgradeCost) {
+                gold -= upgradeCost;
+                gps += 1;
+                upgradeCost = Math.ceil(upgradeCost * 1.5); // 가격 상승
+                updateDisplay();
+            }
+        }
+
+        // 자동 수익 로직 (100ms마다 실행)
+        setInterval(() => {
+            gold += gps / 10;
+            updateDisplay();
+        }, 100);
+    </script>
+</body>
+</html>
