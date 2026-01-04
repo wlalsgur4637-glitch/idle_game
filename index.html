@@ -2,68 +2,411 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>심플 방치형 키우기</title>
+    <title>강화의 전설 RPG - V6.2</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background-color: #f0f0f0; padding-top: 50px; }
-        #gold-display { font-size: 2em; font-weight: bold; color: #d4af37; }
-        .btn { padding: 15px 30px; font-size: 1.2em; cursor: pointer; margin: 10px; border: none; border-radius: 8px; transition: 0.2s; }
-        .click-btn { background-color: #4CAF50; color: white; }
-        .upg-btn { background-color: #2196F3; color: white; }
-        .upg-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+        :root { --bg: #0a0a0f; --panel: #161625; --point: #ff9f43; --success: #2ecc71; --fail: #ff4757; --rare: #a55eea; --epic: #f1c40f; --legend: #e84393; --god: #00cec9; --trans: #ff7675; --void: #6c5ce7; }
+        body { background: var(--bg); color: white; font-family: 'Malgun Gothic', sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        #game-container { width: 520px; background: var(--panel); border-radius: 20px; overflow: hidden; box-shadow: 0 0 50px rgba(0,0,0,0.5); border: 2px solid #333; }
+        
+        .top-bar { background: rgba(0,0,0,0.8); padding: 15px; display: grid; grid-template-columns: 1fr 1fr; border-bottom: 2px solid #444; font-size: 0.85em; gap: 5px; }
+        .gold-text { color: #f1c40f; font-weight: bold; }
+        .exp-bar-container { grid-column: span 2; background: #333; height: 5px; border-radius: 3px; overflow: hidden; margin-top: 5px; }
+        #exp-fill-bar { width: 0%; height: 100%; background: #3498db; transition: width 0.3s; }
+
+        #stage-screen { height: 180px; background: #2c3e50; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #monster-area { font-size: 80px; z-index: 2; transition: 0.1s; }
+        #effect-layer { position: absolute; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; pointer-events: none; z-index: 30; text-shadow: 2px 2px 5px #000; text-align: center; }
+        
+        .hp-bar { width: 70%; height: 14px; background: #333; border-radius: 7px; margin-top: 10px; overflow: hidden; visibility: hidden; border: 1px solid #000; position: relative; z-index: 5; }
+        #hp-fill { width: 100%; height: 100%; background: var(--success); }
+
+        .tabs { display: flex; background: #1e1e2e; }
+        .tab-btn { flex: 1; padding: 12px 5px; border: none; background: none; color: #888; cursor: pointer; font-weight: bold; font-size: 0.8em; }
+        .tab-btn.active { color: var(--point); border-bottom: 3px solid var(--point); background: rgba(255,255,255,0.05); }
+
+        .content { padding: 20px; display: none; height: 480px; overflow-y: auto; }
+        .content.active { display: block; }
+
+        .ui-box { background: #000; border: 1px solid #444; border-radius: 12px; padding: 15px; margin-bottom: 12px; }
+        .btn { width: 100%; padding: 12px; margin: 5px 0; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; background: #34495e; color: white; }
+        
+        #boss-choice, #gamble-choice { display: none; position: absolute; bottom: 15px; gap: 10px; z-index: 100; width: 100%; justify-content: center; }
+        .item-card { background: rgba(255,255,255,0.07); padding: 12px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #444; }
+        
+        .common { color: #fff; } .rare { color: var(--rare); } .epic { color: var(--epic); } .legend { color: var(--legend); } 
+        .god { color: var(--god); text-shadow: 0 0 5px var(--god); } .trans { color: var(--trans); } .void { color: var(--void); animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
 
-    <h1>💰 골드 키우기</h1>
-    <div id="gold-display">현재 골드: 0</div>
-    <p id="gps-display">초당 수익(GPS): 0</p>
+<div id="game-container">
+    <div class="top-bar">
+        <div>💰 <span id="gold" class="gold-text">0</span> G</div>
+        <div style="text-align:right;">⭐ Lv.<span id="lv">1</span> (<span id="exp-text">0</span>%)</div>
+        <div class="exp-bar-container"><div id="exp-fill-bar"></div></div>
+        <div style="color: #2ecc71;">📈 <span id="idle-status">0G/s</span></div>
+        <div style="text-align:right;">🏰 최고 <span id="max-inf-label">0</span>층 | ❤️ <span id="cur-hp">0</span></div>
+    </div>
 
-    <button class="btn click-btn" onclick="clickGold()">클릭해서 채굴!</button>
+    <div id="stage-screen">
+        <div id="effect-layer"></div>
+        <div id="stage-display" style="position:absolute; top:10px; font-weight:bold; color:rgba(255,255,255,0.6);">🏠 마을</div>
+        <div id="monster-area">🏡</div>
+        <div class="hp-bar" id="hp-bar-ui"><div id="hp-fill"></div></div>
+        
+        <div id="boss-choice">
+            <button class="btn" style="background:var(--success); width:120px;" onclick="fightBoss()">⚔️ 전투</button>
+            <button class="btn" style="background:var(--fail); width:120px;" onclick="backToTown('🏃 도망')">🏃 도망</button>
+        </div>
+        <div id="gamble-choice">
+            <button class="btn" style="background:#3498db; width:150px;" onclick="doGamble(75)">안전(75%)</button>
+            <button class="btn" style="background:#9b59b6; width:150px;" onclick="doGamble(25)">도박(25%)</button>
+        </div>
+    </div>
 
-    <hr>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="openTab('t-adventure')">모험</button>
+        <button class="tab-btn" onclick="openTab('t-inf-castle')">무한성</button>
+        <button class="tab-btn" onclick="openTab('t-forge')">강화</button>
+        <button class="tab-btn" onclick="openTab('t-inv')">가방</button>
+        <button class="tab-btn" onclick="openTab('t-shop')">상점/스탯</button>
+    </div>
 
-    <h3>상점</h3>
-    <button id="upg1" class="btn upg-btn" onclick="buyUpgrade()">
-        자동 채굴기 구매 (가격: 10) <br> <small>초당 +1 골드</small>
-    </button>
+    <div id="t-adventure" class="content active">
+        <button class="btn" style="background:var(--point); height:50px;" onclick="startExplore()">🚩 탐험 시작</button>
+        <div id="dungeon-list-container"></div>
+    </div>
 
-    <script>
-        let gold = 0;
-        let gps = 0; // Gold Per Second
-        let upgradeCost = 10;
+    <div id="t-inf-castle" class="content">
+        <div class="ui-box" style="text-align:center; border: 2px solid var(--god);">
+            <h2 style="color:var(--god); margin:0;">무한의 성</h2>
+            <p id="inf-locked" style="color:#ff4757;">[제우스]를 처치하면 해금됩니다.</p>
+            <div id="inf-unlocked" style="display:none;">
+                <h1 id="cur-inf-display">1 층</h1>
+                <button class="btn" style="background:var(--god); color:#000;" onclick="startInfBattle()">🏰 입장</button>
+                <div style="display:flex; gap:5px;">
+                    <button class="btn" onclick="changeInfLayer(-1)">◀</button>
+                    <button class="btn" onclick="changeInfLayer(1)">▶</button>
+                </div>
+            </div>
+        </div>
+        <div class="ui-box" style="font-size: 0.85em;">
+            <b>🎁 무한의 보상 루프</b><br>
+            5F: 강화석 | 10F: 성벌의 검 | 15F: 성소의 갑옷<br>
+            20F: 상급 강화석 | 25F: 운명의 도박
+        </div>
+    </div>
 
-        // 골드 표시 업데이트
-        function updateDisplay() {
-            document.getElementById('gold-display').innerText = `현재 골드: ${Math.floor(gold)}`;
-            document.getElementById('gps-display').innerText = `초당 수익(GPS): ${gps}`;
-            
-            // 버튼 활성화/비활성화 제어
-            const upgBtn = document.getElementById('upg1');
-            upgBtn.disabled = gold < upgradeCost;
-            upgBtn.innerHTML = `자동 채굴기 구매 (가격: ${upgradeCost}) <br> <small>초당 +1 골드</small>`;
+    <div id="t-forge" class="content">
+        <div class="ui-box" id="forge-ui">
+            <div id="f-name" style="font-size:1.2em; font-weight:bold;">장비 미선택</div>
+            <div id="f-change" style="margin:10px 0; color:var(--success);">능력치: -</div>
+            <div id="f-prob" style="color:#54a0ff; margin:10px 0;">성공확률: -</div>
+            <button class="btn" style="background:var(--point)" id="btn-up-execute" onclick="executeUpgrade()" disabled>⚒️ 강화 실행</button>
+        </div>
+    </div>
+
+    <div id="t-inv" class="content">
+        <div id="stone-list-container" class="ui-box" style="display:none; border:1.5px solid var(--god);"></div>
+        <div id="inv-list-container"></div>
+    </div>
+
+    <div id="t-shop" class="content">
+        <div class="ui-box">
+            <h3>💊 체력 회복</h3>
+            <button class="btn" style="background:#2980b9;" onclick="fullHeal()">체력 완전 회복 (50G)</button>
+        </div>
+        <div class="ui-box">
+            <h3>📊 스탯 투자 (P: <span id="stat-pts-label">0</span>)</h3>
+            <div style="display:flex; gap:5px;">
+                <button class="btn" onclick="upStat('atk')">공격</button>
+                <button class="btn" onclick="upStat('def')">방어</button>
+                <button class="btn" onclick="upStat('hp')">체력</button>
+            </div>
+        </div>
+        <div class="ui-box">
+            <h3>🏡 마을 (수익: <span id="idle-val-label">0</span>)</h3>
+            <button class="btn" style="background:var(--success);" onclick="buyIdle()">강화 비용: <span id="idle-cost-label">0</span>G</button>
+        </div>
+        <div id="gacha-list-container"></div>
+        <button class="btn" style="background:#c0392b; margin-top:20px;" onclick="resetGame()">♻️ 초기화</button>
+    </div>
+</div>
+
+<script>
+    let p = {
+        gold: 10000, idle: 500, lv: 1, exp: 0, pts: 0,
+        hp: 2000, maxHp: 2000, atk: 200, def: 0,
+        curStage: 0, state: 'town', inv: [], stones: [],
+        eqW: {n:"훈련용 목검", v:100, l:0, t:"wep", r:"common", id: 1}, 
+        eqA: {n:"낡은 셔츠", v:50, l:0, t:"arm", r:"common", id: 2},
+        targetId: -1, idleLv: 1, isInfUnlocked: false, maxInfFloor: 1, curInfFloor: 1
+    };
+
+    const stages = [
+        { n: "슬라임 숲", lv: 1, bg: "#1e392a", mons: [{n:"쥐", s:"🐭", h:3000, a:300}], boss: {n:"왕슬라임", s:"👑", h:30000, a:1500, g:50000, drop:{n:"왕의 검", v:1000, t:"wep", r:"rare"}} },
+        { n: "지하 감옥", lv: 15, bg: "#2c2c2c", mons: [{n:"해골", s:"💀", h:200000, a:10000}], boss: {n:"사신", s:"👻", h:2000000, a:80000, g:600000, drop:{n:"사신의 낫", v:5000, t:"wep", r:"epic"}} },
+        { n: "용의 둥지", lv: 35, bg: "#4a1212", mons: [{n:"와이번", s:"🐉", h:5000000, a:300000}], boss: {n:"드래곤", s:"🐲", h:50000000, a:2000000, g:15000000, drop:{n:"용갑옷", v:20000, t:"arm", r:"epic"}} },
+        { n: "심연의 틈", lv: 60, bg: "#000000", mons: [{n:"악마", s:"👿", h:2e8, a:2e7}], boss: {n:"심연군주", s:"👹", h:2e9, a:1e8, g:1e9, drop:{n:"심연검", v:100000, t:"wep", r:"legend"}} },
+        { n: "신들의 황혼", lv: 100, bg: "#ffffff", mons: [{n:"발키리", s:"⚔️", h:1e10, a:1e9}], boss: {n:"제우스", s:"⚡", h:2e11, a:1e10, g:1e11, drop:{n:"번개수호", v:500000, t:"arm", r:"god"}} }
+    ];
+
+    const rarities = ["common", "rare", "epic", "legend", "god", "trans", "void"];
+    const gachaData = [
+        { n: "하급 상자", c: 2000, rates: [80, 15, 4.9, 0.1, 0, 0, 0] },
+        { n: "중급 상자", c: 100000, rates: [0, 70, 25, 4.9, 0.1, 0, 0] },
+        { n: "상급 상자", c: 5000000, rates: [0, 0, 70, 25, 4.9, 0.1, 0] },
+        { n: "전설 상자", c: 100000000, rates: [0, 0, 0, 70, 25, 4.9, 0.1] }
+    ];
+
+    function getItemVal(item) {
+        if(!item) return 0;
+        let val = item.v;
+        const weights = { common: 1, rare: 6, epic: 25, legend: 150, god: 2000, trans: 50000, void: 2000000 };
+        const mult = weights[item.r] || 1;
+        for(let i=1; i <= item.l; i++) {
+            let grow = i >= 15 ? 2.5 : (i >= 10 ? 1.8 : 1.4);
+            val *= grow;
+            if(val > 1e33) break;
         }
+        return Math.floor(val * mult);
+    }
 
-        // 클릭 이벤트
-        function clickGold() {
-            gold += 1;
-            updateDisplay();
+    setInterval(() => { p.gold += p.idle; updateUI(); }, 1000);
+
+    function updateUI() {
+        document.getElementById('gold').innerText = Math.floor(p.gold).toLocaleString();
+        document.getElementById('lv').innerText = p.lv;
+        let expPercent = (p.exp / (p.lv * 100)) * 100;
+        document.getElementById('exp-text').innerText = Math.floor(expPercent);
+        document.getElementById('exp-fill-bar').style.width = expPercent + "%";
+        document.getElementById('idle-status').innerText = `${p.idle.toLocaleString()}G/s`;
+        document.getElementById('cur-hp').innerText = Math.max(0, Math.floor(p.hp)).toLocaleString();
+        document.getElementById('stat-pts-label').innerText = p.pts;
+        document.getElementById('idle-val-label').innerText = p.idle.toLocaleString();
+        document.getElementById('idle-cost-label').innerText = (p.idleLv * p.idleLv * 3000).toLocaleString();
+        document.getElementById('max-inf-label').innerText = p.maxInfFloor - 1;
+
+        if(p.isInfUnlocked) {
+            document.getElementById('inf-locked').style.display = 'none';
+            document.getElementById('inf-unlocked').style.display = 'block';
         }
+        renderDungeonList(); renderInventoryList(); renderGachaShop();
+    }
 
-        // 업그레이드 구매
-        function buyUpgrade() {
-            if (gold >= upgradeCost) {
-                gold -= upgradeCost;
-                gps += 1;
-                upgradeCost = Math.ceil(upgradeCost * 1.5); // 가격 상승
-                updateDisplay();
+    function renderDungeonList() {
+        const container = document.getElementById('dungeon-list-container');
+        if(!container) return;
+        container.innerHTML = "";
+        stages.forEach((s, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.style.background = p.curStage === i ? "var(--success)" : "#34495e";
+            btn.innerText = `${s.n} (Lv.${s.lv})`;
+            btn.onclick = () => { p.curStage = i; updateUI(); };
+            container.appendChild(btn);
+        });
+    }
+
+    function renderInventoryList() {
+        const container = document.getElementById('inv-list-container');
+        if(!container) return;
+        container.innerHTML = "<h4>[장착 정보]</h4>";
+        [p.eqW, p.eqA].forEach(it => { if(it) container.appendChild(createItemUI(it, true)); });
+        container.innerHTML += "<h4>[가방 보관함]</h4>";
+        p.inv.forEach(it => { container.appendChild(createItemUI(it, false)); });
+
+        const stoneContainer = document.getElementById('stone-list-container');
+        if (p.stones.length > 0) {
+            stoneContainer.style.display = 'block';
+            stoneContainer.innerHTML = "<b>💎 보유 강화석</b> (장비 선택 후 클릭)<br>";
+            p.stones.forEach((s, idx) => {
+                stoneContainer.innerHTML += `<button class="btn" style="width:auto; padding:5px 10px; margin:3px; background:var(--god); color:#000" onclick="showEffect('가방의 장비를 먼저 선택하세요')">+${s} 강화석</button>`;
+            });
+        } else stoneContainer.style.display = 'none';
+    }
+
+    function createItemUI(it, isEq) {
+        const div = document.createElement('div');
+        div.className = 'item-card';
+        const val = getItemVal(it);
+        div.innerHTML = `<div class="${it.r}"><b>${it.n} +${it.l}</b><br><small>${it.t=='wep'?'공':'방'}: ${val.toLocaleString()}</small></div>
+            <div style="margin-top:8px; display:flex; gap:5px; flex-wrap:wrap;">
+                ${!isEq ? `<button style="flex:1" onclick="equipItem(${it.id})">장착</button>` : ''}
+                <button style="flex:1" onclick="selectForForge(${it.id})">강화선택</button>
+                ${p.stones.length > 0 ? `<button style="flex:1; background:var(--god); color:#000" onclick="useStone(0, ${it.id})">강화석사용</button>` : ''}
+                ${!isEq ? `<button style="flex:1; background:#444" onclick="sellItem(${it.id})">판매</button>` : ''}
+            </div>`;
+        return div;
+    }
+
+    function renderGachaShop() {
+        const container = document.getElementById('gacha-list-container');
+        if(!container) return;
+        container.innerHTML = "<h3>🎁 럭키박스 상점</h3>";
+        gachaData.forEach((box, i) => {
+            const div = document.createElement('div');
+            div.className = "ui-box";
+            let ratesText = box.rates.map((r, idx) => r > 0 ? `${rarities[idx]}:${r}%` : "").filter(x=>x).join(" | ");
+            div.innerHTML = `<b>${box.n} (${box.c.toLocaleString()}G)</b><br><small style="font-size:10px; color:#aaa">${ratesText}</small>
+                <button class="btn" style="background:var(--point)" onclick="buyGacha(${i})">구매</button>`;
+            container.appendChild(div);
+        });
+    }
+
+    function buyGacha(idx) {
+        const box = gachaData[idx];
+        if(p.gold < box.c) return showEffect("골드 부족!");
+        p.gold -= box.c;
+        let rand = Math.random() * 100, cum = 0, rIdx = 0;
+        for(let j=0; j<box.rates.length; j++) { cum += box.rates[j]; if(rand <= cum) { rIdx = j; break; } }
+        const type = Math.random() > 0.5 ? 'wep' : 'arm';
+        p.inv.push({ n: (type=='wep'?'검':'갑옷'), v: (idx+1)*2000, l: 0, t: type, r: rarities[rIdx], id: Date.now() });
+        updateUI();
+    }
+
+    function startExplore() {
+        if(p.state !== 'town') return;
+        p.state = 'adventure';
+        const s = stages[p.curStage];
+        document.getElementById('stage-screen').style.background = s.bg;
+        document.getElementById('stage-display').innerText = `🚩 ${s.n}`;
+        let isBoss = Math.random() < 0.2;
+        p.curMon = isBoss ? s.boss : s.mons[Math.floor(Math.random()*s.mons.length)];
+        document.getElementById('monster-area').innerText = p.curMon.s;
+        if(isBoss) document.getElementById('boss-choice').style.display = 'flex';
+        else spawnMonster(p.curMon, false);
+    }
+
+    function spawnMonster(m, isBoss, isInf = false) {
+        document.getElementById('hp-bar-ui').style.visibility = 'visible';
+        let curMHp = m.h;
+        let battle = setInterval(() => {
+            curMHp -= (p.atk + getItemVal(p.eqW));
+            document.getElementById('hp-fill').style.width = Math.max(0, (curMHp/m.h*100))+'%';
+            if(curMHp <= 0) { 
+                clearInterval(battle); 
+                if(isInf) winInf(m); else win(m, isBoss); 
+            } else {
+                p.hp -= Math.max(1, Math.floor(m.a * (300 / (300 + p.def + getItemVal(p.eqA)))));
+                if(p.hp <= 0) { clearInterval(battle); backToTown("💀 사망"); }
             }
-        }
+            updateUI();
+        }, 500);
+    }
 
-        // 자동 수익 로직 (100ms마다 실행)
-        setInterval(() => {
-            gold += gps / 10;
-            updateDisplay();
-        }, 100);
-    </script>
+    function win(m, isBoss) {
+        p.gold += (isBoss?m.g : m.h/2); p.exp += 50;
+        if(m.n === "제우스") p.isInfUnlocked = true;
+        if(isBoss && Math.random()<0.4) p.inv.push({...m.drop, l:0, id: Date.now()});
+        while(p.exp >= p.lv * 100) { p.exp -= p.lv * 100; p.lv++; p.pts += 3; }
+        backToTown("승리!");
+    }
+
+    // --- 무한의 성 로직 (보상 포함) ---
+    function startInfBattle() {
+        p.state = 'inf';
+        const floor = p.curInfFloor;
+        const mult = Math.pow(1.35, floor - 1);
+        const mon = { n: `수호자`, s: "👹", h: 5e11 * mult, a: 5e9 * mult, g: 3e10 * mult };
+        document.getElementById('monster-area').innerText = mon.s;
+        document.getElementById('stage-display').innerText = `무한의 성 ${floor}층`;
+        spawnMonster(mon, false, true);
+    }
+
+    function winInf(m) {
+        p.gold += m.g;
+        const wonFloor = p.curInfFloor;
+        if (p.curInfFloor === p.maxInfFloor) { 
+            p.maxInfFloor++; 
+            p.curInfFloor++; 
+            // 🎁 보상 지급 루프
+            const pos = wonFloor % 25 === 0 ? 25 : wonFloor % 25;
+            const cycle = Math.floor((wonFloor-1)/25);
+            if(pos === 5 || pos === 20) {
+                p.stones.push(3 + cycle*2 + (pos==20?1:0));
+                showEffect("💎 강화석 획득!");
+            } else if(pos === 10) {
+                p.inv.push({n:`성벌의 검 V${wonFloor}`, v:2e6*wonFloor, l:0, t:'wep', r:'legend', id:Date.now()});
+                showEffect("⚔️ 특별 무기 지급!");
+            } else if(pos === 15) {
+                p.inv.push({n:`성소의 갑옷 V${wonFloor}`, v:1.5e6*wonFloor, l:0, t:'arm', r:'legend', id:Date.now()});
+                showEffect("🛡️ 특별 방어구 지급!");
+            } else if(pos === 25) {
+                document.getElementById('gamble-choice').style.display='flex';
+            }
+        } else {
+            p.curInfFloor++;
+        }
+        backToTown(`${wonFloor}층 돌파!`);
+    }
+
+    function doGamble(chance) {
+        document.getElementById('gamble-choice').style.display = 'none';
+        if(Math.random()*100 <= chance) {
+            p.inv.push({n:"도박의 유산", v:1e12, l:0, t:'wep', r: chance==25?'void':'trans', id:Date.now()});
+            showEffect("🎉 대성공!");
+        } else showEffect("💀 꽝!");
+        updateUI();
+    }
+
+    function useStone(stoneIdx, itemId) {
+        const all = [p.eqW, p.eqA, ...p.inv];
+        const it = all.find(i => i.id === itemId);
+        if(!it) return;
+        it.l += p.stones[stoneIdx];
+        p.stones.splice(stoneIdx, 1);
+        showEffect(`✨ 즉시 +강화 성공!`);
+        updateUI();
+    }
+
+    // --- 강화 로직 ---
+    function selectForForge(id) {
+        p.targetId = id;
+        const all = [p.eqW, p.eqA, ...p.inv];
+        const it = all.find(i => i.id === id);
+        let curV = getItemVal(it);
+        it.l++; let nextV = getItemVal(it); it.l--;
+        let prob = Math.max(10, 95 - (it.l * 2.5));
+        document.getElementById('f-name').innerText = `${it.n} +${it.l}`;
+        document.getElementById('f-name').className = it.r;
+        document.getElementById('f-change').innerText = `${curV.toLocaleString()} ➔ ${nextV.toLocaleString()}`;
+        document.getElementById('f-prob').innerText = `확률: ${prob.toFixed(1)}% | 비용: ${(it.l+1)**2 * 10000}G`;
+        document.getElementById('btn-up-execute').disabled = false;
+        openTab('t-forge');
+    }
+
+    function executeUpgrade() {
+        const all = [p.eqW, p.eqA, ...p.inv];
+        const it = all.find(i => i.id === p.targetId);
+        let cost = (it.l+1)**2 * 10000;
+        if(p.gold < cost) return showEffect("골드 부족!");
+        p.gold -= cost;
+        document.getElementById('btn-up-execute').disabled = true;
+        setTimeout(() => {
+            if(Math.random()*100 < Math.max(10, 95 - (it.l * 2.5))) { it.l++; showEffect("✨ 성공!", "#2ecc71"); }
+            else { if(it.l >= 10) it.l -= 1; showEffect("📉 실패", "#ff4757"); }
+            selectForForge(it.id); updateUI();
+        }, 500);
+    }
+
+    // --- 기타 엔진 ---
+    function fullHeal() { if(p.gold >= 50) { p.gold -= 50; p.hp = p.maxHp; showEffect("완치!"); updateUI(); } }
+    function buyIdle() { let cost = p.idleLv**2 * 3000; if(p.gold >= cost) { p.gold -= cost; p.idle += (p.idleLv * 800); p.idleLv++; updateUI(); } }
+    function upStat(t) { if(p.pts > 0) { p.pts--; if(t==='atk') p.atk+=100; else if(t==='def') p.def+=50; else { p.maxHp+=1000; p.hp+=1000; } updateUI(); } }
+    function sellItem(id) { const idx = p.inv.findIndex(i => i.id === id); p.gold += Math.floor(getItemVal(p.inv[idx]) * 0.4); p.inv.splice(idx, 1); updateUI(); }
+    function equipItem(id) { const idx = p.inv.findIndex(i => i.id === id); const item = p.inv[idx]; if (item.t === 'wep') { p.inv.push(p.eqW); p.eqW = p.inv.splice(idx, 1)[0]; } else { p.inv.push(p.eqA); p.eqA = p.inv.splice(idx, 1)[0]; } updateUI(); }
+    function backToTown(msg) { p.state = 'town'; document.getElementById('boss-choice').style.display='none'; document.getElementById('hp-bar-ui').style.visibility='hidden'; document.getElementById('monster-area').innerText="🏡"; document.getElementById('stage-screen').style.background="#2c3e50"; document.getElementById('stage-display').innerText="🏠 마을"; if(msg) showEffect(msg); updateUI(); }
+    function openTab(id) { document.querySelectorAll('.content').forEach(c => c.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById(id).classList.add('active'); event.currentTarget.classList.add('active'); updateUI(); }
+    function changeInfLayer(v) { p.curInfFloor = Math.max(1, Math.min(p.maxInfFloor, p.curInfFloor + v)); document.getElementById('cur-inf-display').innerText = `${p.curInfFloor} 층`; }
+    function showEffect(txt, col="white") { const el = document.getElementById('effect-layer'); el.innerText = txt; el.style.color = col; setTimeout(() => el.innerText = "", 1500); }
+    function saveGame() { localStorage.setItem('legend_forge_v62', JSON.stringify(p)); }
+    function loadGame() { const saved = localStorage.getItem('legend_forge_v62'); if (saved) p = { ...p, ...JSON.parse(saved) }; p.state = 'town'; updateUI(); }
+    function resetGame() { if (confirm("초기화?")) { localStorage.removeItem('legend_forge_v62'); location.reload(); } }
+    window.onload = loadGame;
+    setInterval(saveGame, 5000);
+    function fightBoss() { document.getElementById('boss-choice').style.display='none'; spawnMonster(p.curMon, true); }
+</script>
 </body>
 </html>
